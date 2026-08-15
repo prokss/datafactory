@@ -132,14 +132,9 @@
   <h2 style="margin:14px 0 8px;">Total accumulated (all time)</h2>
   <div id="kpi-all" class="cards" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-bottom:12px;"></div>
 
-  <div id="cellcards" class="cards" style="grid-template-columns:repeat(4,1fr); gap:12px; margin:48px 0 4px;"></div>
-
-  <div style="display:flex; gap:18px; margin:22px 2px 14px; font-size:13px; align-items:center;">
-    <span class="muted">Outcome:</span>
-    <span class="chleg-i"><span class="sw" style="background:#0ca30c"></span>success</span>
-    <span class="chleg-i"><span class="sw" style="background:#fab219"></span>recovered</span>
-    <span class="chleg-i"><span class="sw" style="background:#d03b3b"></span>failed</span>
-  </div>
+  <!-- 셀 카드가 마지막이다. 내부 뷰어에는 여기 Outcome 범례가 있었지만 그건 'Details'
+       패널(By user/cell/scenario)용이었고, 이 페이지에는 그 패널이 없다.
+       상단 도넛 카드가 이미 같은 범례를 값과 함께 보여 주므로 중복이다. -->
 </main>
 
 <script>
