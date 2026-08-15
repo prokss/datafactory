@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Loop Dashboard</title>
+<style>
+  :root {
+    --bg:#0f1419; --panel:#171d26; --line:#2a3441; --fg:#e6e9ee;
+    --muted:#8b97a7; --accent:#4d9fff; --ok:#35c47f; --warn:#e0b341; --bad:#ef6a6a;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,"Segoe UI","Noto Sans KR",sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { display:flex; align-items:center; gap:16px; padding:12px 20px;
+           background:var(--panel); border-bottom:1px solid var(--line); }
+  header .brand { font-weight:700; letter-spacing:.3px; }
+  main { padding:20px; max-width:1400px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 16px; }
+  h2 { font-size:15px; margin:24px 0 10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+  .filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px;
+             background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  input, button { font:inherit; background:var(--bg); color:var(--fg);
+                  border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  button { background:var(--accent); color:#06121f; border:none; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+  .muted { color:var(--muted); }
+  .sw { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  button.mode.active { background:var(--accent); color:#06121f; border:none; font-weight:600; }
+  .obar { position:relative; display:flex; height:22px; background:#222c38; border-radius:4px; overflow:hidden; }
+  .oseg { display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#06121f; min-width:0; }
+  #charts { display:flex; gap:16px; align-items:stretch; flex-wrap:wrap; margin-bottom:22px; }
+  .dailywrap { flex:1; display:flex; flex-direction:column; justify-content:center; }
+  .chartcard { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+  .charttitle { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; }
+  .chleg { display:flex; flex-direction:column; gap:7px; font-size:12px; }
+  .chleg-i { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+  .chleg-i .sw { width:11px; height:11px; }
+  .donutbox { flex:0 1 160px; min-width:107px; }
+  .donutbox svg { width:100%; height:auto; display:block; }
+  .outrow { display:flex; align-items:center; justify-content:center; gap:28px; padding:0 56px 10px; }
+  .daily { display:flex; align-items:flex-end; gap:8px; margin-top:10px; }
+  .dcol { flex:1; display:flex; flex-direction:column; align-items:center; min-width:0; }
+  .dbars { position:relative; display:flex; align-items:flex-end; justify-content:center; gap:4px; width:72%; }
+  .dbarone { position:relative; flex:1 1 0; height:100%; min-width:0; max-width:26px; }
+  .dbar { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:flex-end;
+          border-radius:3px 3px 0 0; overflow:hidden; background:#222c38; }
+  .dbar > div { width:100%; }
+  .dtot { position:absolute; left:50%; transform:translateX(-50%); z-index:2; text-align:center; font-size:10px;
+          font-weight:700; color:var(--fg); pointer-events:none; white-space:nowrap; }
+  .dlabel { font-size:10px; color:var(--muted); margin-top:6px; white-space:nowrap; }
+  .dtoggle { display:inline-flex; gap:6px; }
+  .dtg { display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:11px;
+         text-transform:none; letter-spacing:normal; padding:3px 10px; border:1px solid var(--line);
+         border-radius:5px; background:var(--bg); color:var(--muted); cursor:pointer; }
+  .dtg.active { color:var(--fg); border-color:#3a4453; }
+  .dtg .led { width:8px; height:8px; border-radius:50%; background:#3a4453; flex:0 0 auto; transition:all .12s; }
+  .dtg.active .led { background:#35c47f; box-shadow:0 0 6px #35c47f; }
+  .chleg-dim { color:#7c8797; }
+  /* 신선도·경고 배지 */
+  .badges { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; font-size:12px; }
+  .badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
+           background:#222c38; color:var(--muted); }
+  .badge.ok   { background:rgba(53,196,127,.15); color:var(--ok); }
+  .badge.warn { background:rgba(224,179,65,.15); color:var(--warn); }
+  .badge.bad  { background:rgba(239,106,106,.15); color:var(--bad); }
+  /* 잠금 화면 */
+  #lock { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center;
+          justify-content:center; z-index:50; }
+  #lock .box { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+               padding:28px 30px; width:min(360px,90vw); }
+  #lock h2 { margin:0 0 4px; font-size:16px; text-transform:none; letter-spacing:0; color:var(--fg); }
+  #lock p { margin:0 0 18px; font-size:12px; color:var(--muted); }
+  #lock input { width:100%; margin-bottom:10px; padding:9px 10px; }
+  #lock button { width:100%; padding:9px; }
+  #lockerr { color:var(--bad); font-size:12px; min-height:18px; margin-top:8px; }
+</style>
+</head>
+<body>
+
+<div id="lock" hidden>
+  <div class="box">
+    <h2>Loop Dashboard</h2>
+    <p>데이터가 암호화되어 있습니다. 전달받은 암호를 입력하세요.</p>
+    <input type="password" id="pass" autocomplete="current-password" placeholder="passphrase">
+    <button id="unlock">열기</button>
+    <div id="lockerr"></div>
+  </div>
+</div>
+
+<header>
+  <span class="brand">Loop Dashboard</span>
+  <span class="muted" style="font-size:12px;">read-only · 외부 요약</span>
+  <span style="margin-left:auto; display:flex; align-items:center; gap:12px;">
+    <span id="metric-toggle" class="dtoggle"></span>
+    <button id="lockbtn" class="ghost" style="font-size:11px; padding:3px 10px;" hidden>잠금</button>
+  </span>
+</header>
+
+<main id="app" hidden>
+  <div class="badges" id="badges"></div>
+
+  <h1>Dashboard <span id="rangelabel" class="muted" style="font-size:13px; font-weight:400;"></span></h1>
+
+  <div id="charts"></div>
+
+  <div class="filters">
+    <div style="display:flex; gap:6px;">
+      <button type="button" class="mode ghost" data-mode="daily">Today</button>
+      <button type="button" class="mode ghost" data-mode="monthly">This month</button>
+      <button type="button" class="mode ghost" data-mode="custom">Custom</button>
+    </div>
+    <span id="customrange" style="display:none; gap:8px; align-items:center; white-space:nowrap;">
+      <span style="font-size:12px; color:var(--muted);">From</span>
+      <input type="date" id="df">
+      <span style="font-size:12px; color:var(--muted);">To</span>
+      <input type="date" id="dt">
+      <button type="button" id="applycustom">Apply</button>
+    </span>
+  </div>
+
+  <div id="kpi" class="cards" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-bottom:8px;"></div>
+
+  <h2 style="margin:14px 0 8px;">Total accumulated (all time)</h2>
+  <div id="kpi-all" class="cards" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-bottom:12px;"></div>
+
+  <div id="cellcards" class="cards" style="grid-template-columns:repeat(4,1fr); gap:12px; margin:48px 0 4px;"></div>
+
+  <div style="display:flex; gap:18px; margin:22px 2px 14px; font-size:13px; align-items:center;">
+    <span class="muted">Outcome:</span>
+    <span class="chleg-i"><span class="sw" style="background:#0ca30c"></span>success</span>
+    <span class="chleg-i"><span class="sw" style="background:#fab219"></span>recovered</span>
+    <span class="chleg-i"><span class="sw" style="background:#d03b3b"></span>failed</span>
+  </div>
+</main>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+//  Loop 외부 대시보드 — 정적 페이지.
+//
+//  내부 뷰어(loopview)의 대시보드에서 'Details' 이전 영역만 재현한다.
+//  내부는 서버가 기간별로 재집계하지만 여기엔 서버가 없으므로,
+//  (일자 × 셀 × outcome) 롤업 팩트를 받아 **브라우저가 같은 형태로 집계**한다.
+//  그래서 렌더링 함수는 내부 dashboard.html 의 것을 그대로 쓴다 — 화면이 갈라지지 않게.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CFG = {
+  // Pages 는 한 브랜치만 서빙한다. 데이터는 data 브랜치에 있으므로 raw 로 직접 받는다.
+  raw:   'https://raw.githubusercontent.com/prokss/datafactory/data',
+  local: './data',                 // 로컬 확인용 (index.html 옆 data/)
+  refreshMs: 5 * 60 * 1000,        // meta 폴링 주기 — 푸시가 매시 55분이라 5분이면 충분
+  staleMinutes: 150,               // 이 시간을 넘겨 갱신이 없으면 경고 (매시 갱신 + 여유)
+  pbkdf2Iter: 300000,
+};
+
+const C = { success:'#0ca30c', recovered:'#fab219', failed:'#d03b3b' };
+const OUT = ['success','recovered','failed'];
+
+const store = {
+  get(k,d){ try { return JSON.parse(localStorage.getItem('dash_'+k)) ?? d; } catch(e){ return d; } },
+  set(k,v){ localStorage.setItem('dash_'+k, JSON.stringify(v)); },
+  del(k){ localStorage.removeItem('dash_'+k); },
+};
+
+let mode   = store.get('mode','daily');
+let custom = store.get('custom',{from:'',to:''});
+let metric = store.get('metric',{count:true,dur:false});
+const durOnly = () => metric.dur && !metric.count;
+const bothOn  = () => metric.count && metric.dur;
+
+let facts = null;      // 팩트 원본
+let meta  = null;      // 신선도·경고용 평문 메타
+let lastData = null;   // 마지막 렌더 페이로드
+
+// ── 데이터 출처 ──────────────────────────────────────────────────────────────
+function dataBase(){
+  const q = new URLSearchParams(location.search).get('src');
+  if (q === 'local') return CFG.local;
+  if (q === 'raw')   return CFG.raw;
+  const host = location.hostname;
+  return (location.protocol === 'file:' || host === 'localhost' || host === '127.0.0.1')
+    ? CFG.local : CFG.raw;
+}
+
+async function fetchJSON(url){
+  const r = await fetch(url, {cache:'no-store'});
+  if (!r.ok) throw new Error(url + ' → ' + r.status);
+  return r.json();
+}
+
+// ── 복호화 (AES-256-GCM, 파일 = salt(16) ‖ iv(12) ‖ ciphertext+tag) ─────────
+async function deriveKey(pass, salt){
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass),
+                                           'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt, iterations:CFG.pbkdf2Iter, hash:'SHA-256'},
+    km, {name:'AES-GCM', length:256}, false, ['decrypt']);
+}
+
+async function gunzip(buf){
+  const ds = new DecompressionStream('gzip');
+  const stream = new Blob([buf]).stream().pipeThrough(ds);
+  return new Response(stream).text();
+}
+
+async function decryptFacts(buf, pass){
+  const raw = new Uint8Array(buf);
+  const key = await deriveKey(pass, raw.slice(0,16));
+  // 암호가 틀리면 GCM 인증 태그 검증에서 예외가 난다 — 그게 곧 "암호 틀림"이다.
+  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:raw.slice(16,28)}, key, raw.slice(28));
+  return JSON.parse(await gunzip(plain));
+}
+
+// ── 표시 헬퍼 (내부 대시보드와 동일) ─────────────────────────────────────────
+function fmtBytes(n){
+  if(!n) return '0 B';
+  const u=['B','KB','MB','GB','TB']; let i=0, v=n;
+  while(v>=1024 && i<u.length-1){ v/=1024; i++; }
+  return (v>=10||i===0? Math.round(v): v.toFixed(1))+' '+u[i];
+}
+function fmtDur(sec){
+  sec = Math.round(sec||0);
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
+  if(h>0) return `${h}h ${m}m`;
+  if(m>0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+function fmtDurShort(sec){
+  sec = Math.round(sec||0);
+  if(sec>=3600) return (sec/3600).toFixed(1)+'h';
+  if(sec>=60) return Math.round(sec/60)+'m';
+  return sec+'s';
+}
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// KST 기준 오늘(YYYY-MM-DD). 브라우저가 어느 시간대든 서버와 같은 날짜 경계를 쓴다.
+const kstToday = () => new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});
+function addDays(iso, n){
+  const d = new Date(iso+'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate()+n);
+  return d.toISOString().slice(0,10);
+}
+
+// ── 집계: 팩트 → 내부 /api/dashboard 와 같은 모양의 페이로드 ─────────────────
+//  service.py 의 make_totals / bucketize / daily 와 같은 규칙을 따른다.
+function emptyTotals(){
+  const t = {total:0, size:0, files:0, duration:0.0, other:0, dur:{other:0}};
+  OUT.forEach(o=>{ t[o]=0; t.dur[o]=0; });
+  return t;
+}
+function addRow(t, oc, n, bytes, files, dur){
+  const k = OUT.includes(oc) ? oc : 'other';
+  t[k] += n; t.total += n; t.size += bytes; t.files += files;
+  t.duration += dur; t.dur[k] += dur;
+}
+
+function resolveRange(){
+  const today = kstToday();
+  if (mode === 'monthly') return {from: today.slice(0,8)+'01', to: today};
+  if (mode === 'custom')  return {from: custom.from||'', to: custom.to||''};
+  return {from: today, to: today};   // daily
+}
+
+function aggregate(){
+  const {from, to} = resolveRange();
+  const inRange = d => (!from || d >= from) && (!to || d <= to);
+
+  const totals = emptyTotals(), totalsAll = emptyTotals();
+  const cells = new Map();
+
+  // 일별 추이: KST 오늘부터 10일치 — 선택 기간과 무관한 고정 시계열(내부와 동일).
+  const daily = [], dayIx = new Map();
+  for (let j=9; j>=0; j--){
+    const d = addDays(kstToday(), -j);
+    dayIx.set(d, daily.length);
+    const row = {date:d, label:d.slice(5).replace('-','-'), total:0, other:0,
+                 dur_total:0, dur:{other:0}};
+    OUT.forEach(o=>{ row[o]=0; row.dur[o]=0; });
+    daily.push(row);
+  }
+
+  for (const [di, ci, oi, n, bytes, files, dur] of facts.rows){
+    const day = facts.days[di], cell = facts.cells[ci], oc = facts.outcomes[oi];
+    addRow(totalsAll, oc, n, bytes, files, dur);
+
+    if (inRange(day)){
+      addRow(totals, oc, n, bytes, files, dur);
+      let c = cells.get(cell);
+      if (!c){ c = emptyTotals(); c.name = cell; cells.set(cell, c); }
+      addRow(c, oc, n, bytes, files, dur);
+    }
+
+    const i = dayIx.get(day);
+    if (i !== undefined){
+      const k = OUT.includes(oc) ? oc : 'other';
+      daily[i][k] += n; daily[i].total += n;
+      daily[i].dur_total += dur; daily[i].dur[k] += dur;
+    }
+  }
+
+  return {
+    totals, totals_all: totalsAll, daily,
+    by_cell: [...cells.values()].sort((a,b)=> b.total - a.total),
+    mode, date_from: from, date_to: to,
+    mounted_roots: facts.mounted_roots, storage_roots: facts.storage_roots,
+  };
+}
+
+// ── 렌더 (내부 dashboard.html 과 동일) ───────────────────────────────────────
+function kpiCards(t){
+  const dur = t.dur || {}, dOnly = durOnly();
+  const dual = (label, count, durSec, col) => {
+    const big = dOnly ? fmtDur(durSec) : count;
+    const sub = dOnly ? `▦ ${count}` : `⏱ ${fmtDur(durSec)}`;
+    return `<div class="card"><div class="muted">${label}</div>`+
+      `<div style="font-size:24px; font-weight:700; ${col?`color:${col};`:''}">${big}</div>`+
+      `<div class="muted" style="font-size:13px; margin-top:2px;">${sub}</div></div>`;
+  };
+  const plain = (label, val) =>
+    `<div class="card"><div class="muted">${label}</div>`+
+    `<div style="font-size:24px; font-weight:700;">${val}</div></div>`;
+  return [
+    dual('Total episodes', t.total, t.duration, null),
+    dual('success', t.success, dur.success||0, C.success),
+    dual('recovered', t.recovered, dur.recovered||0, C.recovered),
+    dual('failed', t.failed, dur.failed||0, C.failed),
+    plain('Storage', fmtBytes(t.size)),
+    plain('Files', t.files),
+  ].join('');
+}
+
+function ring(data, cx, r, sw, suffix, opacity){
+  const total = data.reduce((s,d)=>s+d.value,0), c=2*Math.PI*r; let off=0;
+  const op = (opacity==null?1:opacity);
+  let out = `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="#222c38" stroke-width="${sw}"/>`;
+  data.filter(d=>d.value>0).forEach(d=>{
+    const frac=d.value/total, len=frac*c;
+    out += `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${d.color}" stroke-width="${sw}" stroke-opacity="${op}" `+
+      `stroke-dasharray="${len.toFixed(2)} ${(c-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" `+
+      `transform="rotate(-90 ${cx} ${cx})"><title>${esc(d.name)}${suffix}: ${d.disp!=null?d.disp:d.value} (${(frac*100).toFixed(1)}%)</title></circle>`;
+    off += len;
+  });
+  return out;
+}
+
+function doubleDonut(outer, inner, size, centerNum, centerSub){
+  const cx=size/2, swO=size*0.14, rO=(size-swO)/2;
+  const gap=size*0.035, swI=size*0.10, rI=rO - swO/2 - gap - swI/2;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`+
+    ring(outer, cx, rO, swO, ' · count', 1)+
+    ring(inner, cx, rI, swI, ' · time', 0.5)+
+    `<text x="${cx}" y="${(cx-6).toFixed(0)}" text-anchor="middle" dominant-baseline="central" fill="var(--fg)" font-size="${(size*0.22).toFixed(0)}" font-weight="700">${centerNum}</text>`+
+    `<text x="${cx}" y="${(cx+size*0.13).toFixed(0)}" text-anchor="middle" fill="var(--muted)" font-size="${(size*0.095).toFixed(0)}">${centerSub}</text></svg>`;
+}
+
+function outcomeDonutCard(t){
+  const dur = t.dur || {}, dOnly = durOnly();
+  const countData = OUT.map(o=>({name:o, value:t[o], color:C[o]}));
+  const durData   = OUT.map(o=>({name:o, value:dur[o]||0, color:C[o], disp:fmtDur(dur[o]||0)}));
+  const outer = dOnly ? durData : countData;
+  const inner = dOnly ? countData : durData;
+  const centerBig = dOnly ? fmtDur(t.duration) : t.total;
+  const centerSub = dOnly ? `${t.total} ep` : fmtDur(t.duration);
+  const totalC = OUT.reduce((s,o)=>s+t[o],0)||1;
+  const totalD = OUT.reduce((s,o)=>s+(dur[o]||0),0)||1;
+  const legend = OUT.map(o=>{
+    const cpct=(t[o]/totalC*100).toFixed(0), dpct=((dur[o]||0)/totalD*100).toFixed(0);
+    const countMain = `<b>${t[o]}</b> <span class="muted">${cpct}%</span>`;
+    const durMain   = `<b>${fmtDur(dur[o]||0)}</b> <span class="muted">${dpct}%</span>`;
+    const countDim  = `<span class="chleg-dim" style="font-weight:800">${t[o]}</span> <span class="chleg-dim">(${cpct}%)</span>`;
+    const durDim    = `<span class="chleg-dim" style="font-weight:800">${fmtDur(dur[o]||0)}</span> <span class="chleg-dim">(${dpct}%)</span>`;
+    return `<span class="chleg-i"><span class="sw" style="background:${C[o]}"></span>${o} `+
+           `${dOnly?durMain:countMain} ${dOnly?countDim:durDim}</span>`;
+  }).join('');
+  return `<div class="chartcard"><div class="charttitle">Outcome</div>
+      <div class="outrow">
+        <div class="donutbox">${doubleDonut(outer, inner, 160, centerBig, centerSub)}</div>
+        <div class="chleg">${legend}</div>
+      </div></div>`;
+}
+
+function dailyChart(days, sc, sd){
+  const H = 130, barH = H - 16;
+  const maxC = Math.max(1, ...days.map(d=>d.total));
+  const maxD = Math.max(1, ...days.map(d=>d.dur_total||0));
+  function bar(d, kind){
+    const isC = kind==='count';
+    const total = isC ? d.total : (d.dur_total||0);
+    const max = isC ? maxC : maxD;
+    const vals = isC ? d : (d.dur||{});
+    const fill = total/max*barH;
+    const segs = ['failed','recovered','success'].map(o=>{
+      const v = vals[o]||0;
+      if(!v) return '';
+      const disp = isC ? v : fmtDur(v);
+      return `<div title="${d.label} · ${isC?'count':'time'} · ${o}: ${disp}" style="height:${(v/max*barH).toFixed(1)}px; background:${C[o]};"></div>`;
+    }).join('');
+    const lbl = total>0 ? `<div class="dtot" style="bottom:${(fill+2).toFixed(1)}px;">${isC? d.total : fmtDurShort(d.dur_total||0)}</div>` : '';
+    return `<div class="dbarone"><div class="dbar">${segs}</div>${lbl}</div>`;
+  }
+  const cols = days.map(d=>{
+    let bars = '';
+    if(sc) bars += bar(d,'count');
+    if(sd) bars += bar(d,'dur');
+    return `<div class="dcol" title="${d.date} · ${d.total} ep · ${fmtDur(d.dur_total||0)}">
+      <div class="dbars" style="height:${H}px;">${bars}</div>
+      <div class="dlabel">${d.label}</div></div>`;
+  }).join('');
+  return `<div class="daily">${cols}</div>`;
+}
+
+function cellCards(rows){
+  const useDur = metric.dur;
+  const val = r => useDur ? (r.duration||0) : (r.total||0);
+  const list = (rows||[]).filter(r => val(r) > 0).sort((a,b)=> val(b)-val(a)).slice(0,6);
+  const n = Math.max(4, list.length);
+  const maxCount = Math.max(1, ...list.map(r=>r.total||0));
+  const maxDur   = Math.max(1e-9, ...list.map(r=>r.duration||0));
+  const bar = (r, isC) => {
+    const vals = isC ? r : (r.dur||{});
+    const filled = ((isC ? (r.total||0) : (r.duration||0)) / (isC ? maxCount : maxDur)) * 100;
+    let segs='';
+    OUT.forEach(o=>{ const v=vals[o]||0; if(v) segs+=`<div class="oseg" style="flex:${v}; background:${C[o]};">${isC? v : fmtDurShort(v)}</div>`; });
+    const oth = isC ? (r.other||0) : ((r.dur||{}).other||0);
+    if(oth) segs+=`<div class="oseg" style="flex:${oth}; background:#5b6674; color:#fff;">${isC?oth:fmtDurShort(oth)}</div>`;
+    return `<div class="obar" style="width:${filled}%; min-width:2px; margin-top:5px;">${segs||''}</div>`;
+  };
+  let html='';
+  for(let i=0;i<n;i++){
+    const r = list[i];
+    if(!r){ html += `<div class="card" style="padding:12px 14px;"></div>`; continue; }
+    let bars=''; if(!durOnly()) bars+=bar(r,true); if(metric.dur) bars+=bar(r,false);
+    html += `<div class="card" style="padding:12px 14px;">
+      <div style="font-weight:700; font-size:15px; text-transform:capitalize;">${esc(r.name)}</div>
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:4px; font-size:18px;">
+        <span class="muted" style="font-weight:600;">${r.total}</span>
+        <span class="muted" style="font-weight:600;">${fmtDur(r.duration||0)}</span>
+      </div>${bars}</div>`;
+  }
+  return {html, n};
+}
+
+// ── 신선도·경고 배지 ────────────────────────────────────────────────────────
+//  크론이 조용히 죽으면 페이지는 옛 데이터를 아무 일 없다는 듯 계속 보여준다.
+//  잘못된 숫자를 믿는 게 못 보는 것보다 나쁘므로, 이 배지는 선택이 아니라 필수다.
+function renderBadges(d){
+  const out = [];
+  const ago = min => min < 60 ? `${min}분 전`
+                   : min < 1440 ? `${Math.floor(min/60)}시간 전`
+                   : `${Math.floor(min/1440)}일 전`;
+
+  // 데이터 시각(generated_at)과 **생존 확인 시각(checked_at)은 다른 것**이다.
+  //  · 데이터가 안 바뀌는 날(주말·휴일)에는 generated_at 이 그대로 멈춰 있다 — 정상이다.
+  //  · 크론이 죽었는지는 checked_at 으로만 알 수 있다. 그래서 판정 기준은 checked_at 이다.
+  //    (내보내기 쪽이 변경이 없어도 하루 한 번은 올려 준다)
+  const gen  = meta?.generated_at || facts?.generated_at;
+  const chk  = meta?.checked_at;
+  const stale = chk ? (Date.now() - new Date(chk).getTime())/60000 > CFG.staleMinutes : false;
+  if (gen){
+    const genMin = Math.round((Date.now() - new Date(gen).getTime())/60000);
+    const tail = chk ? ` · ${ago(Math.round((Date.now() - new Date(chk).getTime())/60000))} 확인`
+                     : ` · ${ago(genMin)}`;
+    out.push(`<span class="badge ${stale?'warn':'ok'}">${stale?'▲':'●'} `+
+             `${esc(gen.replace('T',' ').slice(0,16))} 데이터${esc(tail)}`+
+             `${stale?' — 갱신 멈춤':''}</span>`);
+  }
+  const mounted = d.mounted_roots, roots = d.storage_roots;
+  if (mounted != null && roots != null && mounted < roots)
+    out.push(`<span class="badge bad">▲ 스토리지 ${mounted}/${roots} 마운트 — 용량 수치 불완전</span>`);
+
+  // 복제: 지연과 단절을 따로 본다. 끊겨도 받은 WAL 을 다 재생했으면 지연은 0 이라
+  // 지연만 보면 단절을 놓친다.
+  const st = meta?.replica_status, lag = meta?.replica_lag_s;
+  if (st && st !== 'streaming')
+    out.push(`<span class="badge bad">▲ DB 복제 중단 (${esc(st)}) — 데이터가 뒤처질 수 있음</span>`);
+  else if (lag != null && lag > 600)
+    out.push(`<span class="badge warn">▲ DB 복제 지연 ${Math.round(lag/60)}분</span>`);
+  document.getElementById('badges').innerHTML = out.join('');
+}
+
+function render(){
+  const d = lastData = aggregate();
+  document.getElementById('charts').innerHTML =
+    outcomeDonutCard(d.totals) +
+    `<div class="chartcard" style="flex:1; min-width:360px; display:flex; flex-direction:column;">
+      <div class="charttitle">Daily · last 10 days</div>
+      <div class="dailywrap">${dailyChart(d.daily, metric.count, metric.dur)}</div>
+    </div>`;
+  document.getElementById('kpi-all').innerHTML = kpiCards(d.totals_all);
+  document.getElementById('kpi').innerHTML     = kpiCards(d.totals);
+  const cc = cellCards(d.by_cell);
+  const ccEl = document.getElementById('cellcards');
+  ccEl.style.gridTemplateColumns = `repeat(${cc.n},1fr)`;
+  ccEl.innerHTML = cc.html;
+
+  let rl = '';
+  if (d.mode==='daily')        rl = `Today · ${d.date_from}`;
+  else if (d.mode==='monthly') rl = `This month · ${d.date_from} ~ ${d.date_to}`;
+  else if (d.mode==='custom' && (d.date_from||d.date_to)) rl = `${d.date_from||'…'} ~ ${d.date_to||'…'}`;
+  document.getElementById('rangelabel').textContent = rl;
+
+  renderBadges(d);
+
+  const mt = document.getElementById('metric-toggle');
+  const tg = (m,label)=>`<button class="dtg ${metric[m]?'active':''}" data-m="${m}"><span class="led"></span>${label}</button>`;
+  mt.innerHTML = tg('count','Count') + tg('dur','Duration');
+  mt.querySelectorAll('.dtg').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const m=b.dataset.m, next={...metric,[m]:!metric[m]};
+      if(!next.count && !next.dur) return;      // 최소 하나는 켜둔다
+      metric=next; store.set('metric',metric); render();
+    });
+  });
+}
+
+// ── 적재 ────────────────────────────────────────────────────────────────────
+function setModeUI(){
+  document.querySelectorAll('button.mode').forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
+  document.getElementById('customrange').style.display = (mode==='custom') ? 'inline-flex' : 'none';
+  document.getElementById('df').value = custom.from||'';
+  document.getElementById('dt').value = custom.to||'';
+}
+
+function showLock(msg){
+  document.getElementById('lock').hidden = false;
+  document.getElementById('lockerr').textContent = msg||'';
+  document.getElementById('pass').focus();
+}
+function hideLock(){
+  document.getElementById('lock').hidden = true;
+  document.getElementById('app').hidden = false;
+  document.getElementById('lockbtn').hidden = !store.get('pass', null);
+}
+
+async function loadFacts(){
+  const base = dataBase();
+  try { meta = await fetchJSON(`${base}/meta.json?v=${Date.now()}`); } catch(e){ meta = null; }
+  // 캐시 무효화 키는 매 push 마다 바뀌는 checked_at 을 쓴다 — generated_at 은 데이터가
+  // 안 바뀌면 그대로라, 그걸 쓰면 raw CDN 캐시가 갱신되지 않을 수 있다.
+  const v = encodeURIComponent(meta?.checked_at || meta?.generated_at || String(Date.now()));
+
+  // 암호문이 있으면 그걸 쓰고, 없으면 평문(로컬 확인용)으로 떨어진다.
+  const encRes = await fetch(`${base}/facts.json.enc?v=${v}`, {cache:'no-store'});
+  if (encRes.ok){
+    const buf = await encRes.arrayBuffer();
+    const pass = store.get('pass', null);
+    if (!pass){ showLock(); window.__enc = buf; return false; }
+    try {
+      facts = await decryptFacts(buf, pass);
+    } catch(e){
+      store.del('pass'); window.__enc = buf;
+      showLock('암호가 올바르지 않습니다.');
+      return false;
+    }
+  } else {
+    facts = await fetchJSON(`${base}/facts.json?v=${v}`);
+  }
+  hideLock();
+  return true;
+}
+
+async function refresh(){
+  try { if (await loadFacts()) render(); }
+  catch(e){ document.getElementById('badges').innerHTML =
+    `<span class="badge bad">▲ 데이터를 불러오지 못했습니다 — ${esc(e.message)}</span>`;
+    document.getElementById('app').hidden = false; }
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  setModeUI();
+  document.querySelectorAll('button.mode').forEach(b=>{
+    b.addEventListener('click', ()=>{ mode=b.dataset.mode; store.set('mode',mode); setModeUI(); if(facts) render(); });
+  });
+  document.getElementById('applycustom').addEventListener('click', ()=>{
+    custom = {from:document.getElementById('df').value.trim(), to:document.getElementById('dt').value.trim()};
+    store.set('custom',custom); if(facts) render();
+  });
+  document.getElementById('unlock').addEventListener('click', async ()=>{
+    const p = document.getElementById('pass').value;
+    if(!p) return;
+    try {
+      facts = await decryptFacts(window.__enc, p);
+      store.set('pass', p);          // 다음 접속부터는 묻지 않는다
+      hideLock(); render();
+    } catch(e){ document.getElementById('lockerr').textContent = '암호가 올바르지 않습니다.'; }
+  });
+  document.getElementById('pass').addEventListener('keydown', e=>{
+    if(e.key==='Enter') document.getElementById('unlock').click();
+  });
+  document.getElementById('lockbtn').addEventListener('click', ()=>{
+    store.del('pass'); location.reload();     // 잠금 = 저장된 암호 삭제
+  });
+  refresh();
+  setInterval(refresh, CFG.refreshMs);
+});
+</script>
+</body>
+</html>
