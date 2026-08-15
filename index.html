@@ -70,6 +70,11 @@
   /* 잠금 화면 */
   #lock { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center;
           justify-content:center; z-index:50; }
+  /* ★ 이 줄이 없으면 잠금화면이 절대 사라지지 않는다.
+     `hidden` 속성은 브라우저 기본 규칙 `[hidden]{display:none}`(특이성 0,1,0)으로 동작하는데,
+     위의 `#lock{display:flex}` 는 ID 선택자(1,0,0)라 그걸 이긴다. 결과적으로 복호화가
+     성공해도 오버레이가 화면을 계속 덮어 "열리지 않는" 것처럼 보인다. */
+  #lock[hidden] { display:none; }
   #lock .box { background:var(--panel); border:1px solid var(--line); border-radius:12px;
                padding:28px 30px; width:min(360px,90vw); }
   #lock h2 { margin:0 0 4px; font-size:16px; text-transform:none; letter-spacing:0; color:var(--fg); }
