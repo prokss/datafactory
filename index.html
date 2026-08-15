@@ -206,12 +206,23 @@ async function gunzip(buf){
   return new Response(stream).text();
 }
 
+// 단계를 나눠 던진다. 한 덩어리로 묶어 잡으면 **환경 문제가 전부 "암호 틀림"으로 둔갑**해서,
+// 맞는 암호를 몇 번이고 다시 입력하게 만든다(실제로 그렇게 됐다).
+function stageError(code, msg){ const e = new Error(msg || code); e.code = code; return e; }
+
 async function decryptFacts(buf, pass){
   const raw = new Uint8Array(buf);
-  const key = await deriveKey(pass, raw.slice(0,16));
-  // 암호가 틀리면 GCM 인증 태그 검증에서 예외가 난다 — 그게 곧 "암호 틀림"이다.
-  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:raw.slice(16,28)}, key, raw.slice(28));
-  return JSON.parse(await gunzip(plain));
+  let key, plain;
+  try {
+    key = await deriveKey(pass, raw.slice(0,16));
+  } catch(e){ throw stageError('KDF', 'PBKDF2 실패: ' + e.message); }
+  try {
+    // 암호가 틀리면 GCM 인증 태그 검증에서 예외가 난다 — 그게 곧 "암호 틀림"이다.
+    plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:raw.slice(16,28)}, key, raw.slice(28));
+  } catch(e){ throw stageError('BAD_PASS'); }
+  try {
+    return JSON.parse(await gunzip(plain));
+  } catch(e){ throw stageError('FORMAT', 'gzip 해제/파싱 실패: ' + e.message); }
 }
 
 // ── 표시 헬퍼 (내부 대시보드와 동일) ─────────────────────────────────────────
@@ -535,27 +546,61 @@ function hideLock(){
   document.getElementById('lockbtn').hidden = !store.get('pass', null);
 }
 
+// 브라우저가 복호화에 필요한 것을 갖췄는지 먼저 본다.
+// 이걸 안 보면 환경 문제(구형 브라우저·비 HTTPS)가 전부 "암호가 틀렸다"로 둔갑해서,
+// 맞는 암호를 몇 번이고 다시 입력하게 만든다.
+function cryptoBlocker(){
+  if (!globalThis.crypto || !crypto.subtle)
+    return 'HTTPS 로 열어야 복호화할 수 있습니다(브라우저 보안 정책). ' + envInfo();
+  if (typeof DecompressionStream === 'undefined')
+    return '이 브라우저는 gzip 해제(DecompressionStream)를 지원하지 않습니다. '
+         + '최신 브라우저로 열어 주세요. ' + envInfo();
+  return null;
+}
+
+// 오류가 났을 때만 보여 주는 한 줄 진단 — 어느 브라우저에서 무엇이 없는지 바로 알 수 있게.
+function envInfo(){
+  const ua = navigator.userAgent || '';
+  const m = ua.match(/(Chrome|CriOS|Firefox|Edg|Version)\/([0-9.]+)/);
+  return `[${m ? m[1] + ' ' + m[2] : ua.slice(0, 40)}`
+       + ` · subtle=${!!(globalThis.crypto && crypto.subtle)}`
+       + ` · gzip=${typeof DecompressionStream !== 'undefined'}`
+       + ` · secure=${globalThis.isSecureContext}]`;
+}
+
+// 암호문을 받아온다. bust=true 면 캐시를 완전히 우회한다 —
+// 키가 바뀐 뒤 재시도할 때 옛 암호문을 다시 쥐면 무엇을 입력해도 열리지 않는다.
+async function fetchEnc(bust){
+  const base = dataBase();
+  const v = bust ? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+                 : encodeURIComponent(meta?.checked_at || meta?.generated_at || String(Date.now()));
+  const r = await fetch(`${base}/facts.json.enc?v=${v}`, {cache:'no-store'});
+  return r.ok ? await r.arrayBuffer() : null;
+}
+
 async function loadFacts(){
   const base = dataBase();
   try { meta = await fetchJSON(`${base}/meta.json?v=${Date.now()}`); } catch(e){ meta = null; }
-  // 캐시 무효화 키는 매 push 마다 바뀌는 checked_at 을 쓴다 — generated_at 은 데이터가
-  // 안 바뀌면 그대로라, 그걸 쓰면 raw CDN 캐시가 갱신되지 않을 수 있다.
-  const v = encodeURIComponent(meta?.checked_at || meta?.generated_at || String(Date.now()));
 
   // 암호문이 있으면 그걸 쓰고, 없으면 평문(로컬 확인용)으로 떨어진다.
-  const encRes = await fetch(`${base}/facts.json.enc?v=${v}`, {cache:'no-store'});
-  if (encRes.ok){
-    const buf = await encRes.arrayBuffer();
+  const buf = await fetchEnc(false);
+  if (buf){
+    window.__enc = buf;
+    const blocked = cryptoBlocker();
+    if (blocked){ showLock(blocked); return false; }
     const pass = store.get('pass', null);
-    if (!pass){ showLock(); window.__enc = buf; return false; }
+    if (!pass){ showLock(); return false; }
     try {
       facts = await decryptFacts(buf, pass);
     } catch(e){
-      store.del('pass'); window.__enc = buf;
-      showLock('암호가 올바르지 않습니다.');
+      store.del('pass');
+      showLock('저장된 암호로 열리지 않습니다. 다시 입력해 주세요.');
       return false;
     }
   } else {
+    // 캐시 무효화 키는 매 push 마다 바뀌는 checked_at 을 쓴다 — generated_at 은 데이터가
+    // 안 바뀌면 그대로라, 그걸 쓰면 raw CDN 캐시가 갱신되지 않을 수 있다.
+    const v = encodeURIComponent(meta?.checked_at || meta?.generated_at || String(Date.now()));
     facts = await fetchJSON(`${base}/facts.json?v=${v}`);
   }
   hideLock();
@@ -579,13 +624,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
     store.set('custom',custom); if(facts) render();
   });
   document.getElementById('unlock').addEventListener('click', async ()=>{
-    const p = document.getElementById('pass').value;
+    const p = document.getElementById('pass').value.trim();   // 붙여넣기로 딸려온 공백 제거
     if(!p) return;
+    const err = document.getElementById('lockerr');
+    const blocked = cryptoBlocker();
+    if (blocked){ err.textContent = blocked; return; }
+    err.textContent = '여는 중…';
     try {
-      facts = await decryptFacts(window.__enc, p);
+      // ★ 메모리에 있는 암호문을 재사용하지 않고 **새로 받는다.**
+      //   키가 바뀐 뒤 열어둔 탭은 옛 암호문을 쥐고 있어, 맞는 암호를 넣어도 계속 실패한다.
+      const buf = (await fetchEnc(true)) || window.__enc;
+      facts = await decryptFacts(buf, p);
+      window.__enc = buf;
       store.set('pass', p);          // 다음 접속부터는 묻지 않는다
+      err.textContent = '';
       hideLock(); render();
-    } catch(e){ document.getElementById('lockerr').textContent = '암호가 올바르지 않습니다.'; }
+    } catch(e){
+      err.innerHTML = (e.code === 'BAD_PASS')
+        ? '암호가 올바르지 않습니다.'
+        : `복호화 단계 오류 [${esc(e.code || '?')}] ${esc(e.message || '')}<br>`
+          + `<span style="opacity:.7">${esc(envInfo())}</span>`;
+    }
   });
   document.getElementById('pass').addEventListener('keydown', e=>{
     if(e.key==='Enter') document.getElementById('unlock').click();
