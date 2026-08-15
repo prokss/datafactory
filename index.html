@@ -585,7 +585,7 @@ async function loadFacts(){
   // 암호문이 있으면 그걸 쓰고, 없으면 평문(로컬 확인용)으로 떨어진다.
   const buf = await fetchEnc(false);
   if (buf){
-    window.__enc = buf;
+    globalThis.__enc = buf;
     const blocked = cryptoBlocker();
     if (blocked){ showLock(blocked); return false; }
     const pass = store.get('pass', null);
@@ -633,9 +633,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     try {
       // ★ 메모리에 있는 암호문을 재사용하지 않고 **새로 받는다.**
       //   키가 바뀐 뒤 열어둔 탭은 옛 암호문을 쥐고 있어, 맞는 암호를 넣어도 계속 실패한다.
-      const buf = (await fetchEnc(true)) || window.__enc;
+      const buf = (await fetchEnc(true)) || globalThis.__enc;
       facts = await decryptFacts(buf, p);
-      window.__enc = buf;
+      globalThis.__enc = buf;
       store.set('pass', p);          // 다음 접속부터는 묻지 않는다
       err.textContent = '';
       hideLock(); render();
