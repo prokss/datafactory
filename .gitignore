@@ -16,3 +16,6 @@ ops/
 *.md
 
 .DS_Store
+
+# 문서는 Mac 에만 둔다(loopview 규약). 저장소에 올리지 않는다.
+docs/
