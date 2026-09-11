@@ -14,6 +14,9 @@ fixtures/
 # 개발·검증 도구. loopview 와 같은 규약(문서·ops 는 Mac 에만 둔다).
 ops/
 *.md
+# 배포본 안내문만 예외 — 나머지 문서는 계속 Mac 에만 둔다.
+# (gitignore 는 줄 끝 주석을 지원하지 않는다. 붙여 쓰면 패턴이 통째로 무효가 된다.)
+!README.md
 
 .DS_Store
 

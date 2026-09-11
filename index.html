@@ -5,12 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Data Factory</title>
-<!-- JS 가 꺼져 있어도 넘어가도록 meta refresh 를 함께 둔다. -->
+
 <meta http-equiv="refresh" content="0; url=dashboard/">
 <link rel="canonical" href="https://prokss.github.io/datafactory/dashboard/">
-<style>
-  /* 대시보드와 같은 바탕색 — 넘어가는 찰나에 흰 화면이 번쩍이지 않게. */
-  html, body { height:100%; margin:0; background:#0f1419; color:#8b97a7;
+<style>  html, body { height:100%; margin:0; background:#0f1419; color:#8b97a7;
                font:14px/1.6 -apple-system,"Segoe UI","Noto Sans KR",sans-serif; }
   .wrap { height:100%; display:flex; flex-direction:column; align-items:center;
           justify-content:center; gap:10px; }
@@ -22,20 +20,7 @@
   <div>Data Factory</div>
   <div><a href="dashboard/">대시보드로 이동</a></div>
 </div>
-<script>
-  // ─────────────────────────────────────────────────────────────────────────
-  //  Data Factory 메인 — 지금은 대시보드로 넘겨주기만 한다.
-  //
-  //  · replace() 를 쓴다: push 로 넘기면 대시보드에서 '뒤로'를 눌렀을 때 여기로 왔다가
-  //    다시 대시보드로 튕겨 나가는 되돌이가 생긴다.
-  //  · 쿼리·해시를 그대로 넘긴다(예: ?src=raw) — 진단할 때 필요하다.
-  //  · 암호는 여기서 묻지 않는다. 이 페이지에는 보호할 내용이 없고, 대시보드에서 묻는다.
-  //    암호 해제 상태(localStorage)는 오리진 단위라 두 경로가 자동으로 공유한다.
-  //
-  //  ★ 나중에 이 페이지에 실제 공유 내용을 넣게 되면, 그때는 대시보드와 **같은 잠금**을
-  //    여기에도 붙여야 한다. 넘겨주기만 하는 지금은 붙일 대상이 없다.
-  // ─────────────────────────────────────────────────────────────────────────
-  location.replace('dashboard/' + location.search + location.hash);
+<script>  location.replace('dashboard/' + location.search + location.hash);
 </script>
 </body>
 </html>
