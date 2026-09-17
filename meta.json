@@ -1,9 +1,9 @@
 {
  "schema_version": 1,
- "generated_at": "2026-09-15T18:55:02+09:00",
- "checked_at": "2026-09-15T18:55:02+09:00",
- "rows": 422,
- "days": 46,
+ "generated_at": "2026-09-16T19:20:14+09:00",
+ "checked_at": "2026-09-16T19:20:15+09:00",
+ "rows": 436,
+ "days": 47,
  "storage_roots": 4,
  "mounted_roots": 4,
  "replica_lag_s": 0,
