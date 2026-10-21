@@ -1,11 +1,11 @@
 {
  "schema_version": 1,
- "generated_at": "2026-10-10T17:55:02+09:00",
- "checked_at": "2026-10-10T17:55:03+09:00",
- "rows": 673,
- "days": 60,
- "storage_roots": 4,
- "mounted_roots": 4,
+ "generated_at": "2026-10-21T18:55:02+09:00",
+ "checked_at": "2026-10-21T18:55:02+09:00",
+ "rows": 780,
+ "days": 68,
+ "storage_roots": 8,
+ "mounted_roots": 8,
  "replica_lag_s": 0,
  "replica_status": "streaming"
 }
