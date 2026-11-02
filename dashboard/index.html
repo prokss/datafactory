@@ -87,19 +87,18 @@
 <div id="lock" hidden>
   <div class="box">
     <h2>Data Factory Dashboard</h2>
-    <p>데이터가 암호화되어 있습니다. 전달받은 암호를 입력하세요.</p>
+    <p>This data is encrypted. Enter the passphrase you were given.</p>
     <input type="password" id="pass" autocomplete="current-password" placeholder="passphrase">
-    <button id="unlock">열기</button>
+    <button id="unlock">Unlock</button>
     <div id="lockerr"></div>
   </div>
 </div>
 
 <header>
   <span class="brand">Data Factory Dashboard</span>
-  <span class="muted" style="font-size:12px;">read-only · 외부 요약</span>
   <span style="margin-left:auto; display:flex; align-items:center; gap:12px;">
     <span id="metric-toggle" class="dtoggle"></span>
-    <button id="lockbtn" class="ghost" style="font-size:11px; padding:3px 10px;" hidden>잠금</button>
+    <button id="lockbtn" class="ghost" style="font-size:11px; padding:3px 10px;" hidden>Lock</button>
   </span>
 </header>
 
@@ -132,7 +131,7 @@
   <h2 style="margin:14px 0 8px;">Total accumulated (all time)</h2>
   <div id="kpi-all" class="cards" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-bottom:12px;"></div>
 
-  <div id="cellcards" class="cards" style="grid-template-columns:repeat(4,1fr); gap:12px; margin:48px 0 4px;"></div>
+  <div id="cellcards" class="cards" style="grid-template-columns:repeat(auto-fit,minmax(80px,1fr)); gap:8px; margin:40px 0 4px;"></div>
 
 </main>
 
@@ -200,14 +199,14 @@ async function decryptFacts(buf, pass){
   let key, plain;
   try {
     key = await deriveKey(pass, raw.slice(0,16));
-  } catch(e){ throw stageError('KDF', 'PBKDF2 실패: ' + e.message); }
+  } catch(e){ throw stageError('KDF', 'PBKDF2 failed: ' + e.message); }
   try {
 
     plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:raw.slice(16,28)}, key, raw.slice(28));
   } catch(e){ throw stageError('BAD_PASS'); }
   try {
     return JSON.parse(await gunzip(plain));
-  } catch(e){ throw stageError('FORMAT', 'gzip 해제/파싱 실패: ' + e.message); }
+  } catch(e){ throw stageError('FORMAT', 'gzip/parse failed: ' + e.message); }
 }
 
 function fmtBytes(n){
@@ -402,65 +401,100 @@ function dailyChart(days, sc, sd){
   return `<div class="daily">${cols}</div>`;
 }
 
-function cellCards(rows){
+function cellOrder(){
+  const ids = ((facts && facts.cells) || [])
+    .map(c => (String(c).match(/^(cell\d+)/i) || [])[1])
+    .filter(Boolean).map(s => s.toLowerCase());
+  return [...new Set(ids)].sort();
+}
 
-  const succDur = r => (r.dur||{}).success || 0;
-  const list = (rows||[]).filter(r => (r.total||0) > 0)
-                         .sort((a,b)=> succDur(b) - succDur(a))
-                         .slice(0, 4);
-  const n = 4;
-  const maxCount = Math.max(1, ...list.map(r=>r.total||0));
-  const maxDur   = Math.max(1e-9, ...list.map(r=>r.duration||0));
+const BLANK = '\u00a0';
+
+function cellCards(rows){
+  const ORDER = cellOrder();
+  const byCell = {};
+  (rows||[]).forEach(r=>{
+    const mm = (r.name||'').match(/^(cell\d+)/i); if(!mm) return;
+    const id = mm[1].toLowerCase(); if(ORDER.indexOf(id) < 0) return;
+    const a = byCell[id] || (byCell[id] = {name:id, _max:-1, total:0, success:0, recovered:0,
+                                           failed:0, other:0, duration:0,
+                                           dur:{success:0,recovered:0,failed:0,other:0}});
+    ['total','success','recovered','failed','other','duration'].forEach(k=> a[k] += r[k]||0);
+    const rd = r.dur||{}; ['success','recovered','failed','other'].forEach(k=> a.dur[k] += rd[k]||0);
+    if((r.total||0) > a._max){ a._max = r.total||0; a.name = r.name; }
+  });
+  const list = ORDER.map(id => byCell[id]);
+  const n = ORDER.length;
+  const maxCount = Math.max(1, ...list.map(r=> r ? r.total||0 : 0));
+  const maxDur   = Math.max(1e-9, ...list.map(r=> r ? r.duration||0 : 0));
   const bar = (r, isC) => {
     const vals = isC ? r : (r.dur||{});
     const filled = ((isC ? (r.total||0) : (r.duration||0)) / (isC ? maxCount : maxDur)) * 100;
     let segs='';
-    OUT.forEach(o=>{ const v=vals[o]||0; if(v) segs+=`<div class="oseg" style="flex:${v}; background:${C[o]};">${isC? v : fmtDurShort(v)}</div>`; });
+    OUT.forEach(o=>{ const v=vals[o]||0;
+      if(v) segs+=`<div class="oseg" title="${o} ${isC? v : fmtDurShort(v)}" style="flex:${v}; background:${C[o]};"></div>`; });
     const oth = isC ? (r.other||0) : ((r.dur||{}).other||0);
-    if(oth) segs+=`<div class="oseg" style="flex:${oth}; background:#5b6674; color:#fff;">${isC?oth:fmtDurShort(oth)}</div>`;
-    return `<div class="obar" style="width:${filled}%; min-width:2px; margin-top:5px;">${segs||''}</div>`;
+    if(oth) segs+=`<div class="oseg" title="other ${isC?oth:fmtDurShort(oth)}" style="flex:${oth}; background:#5b6674;"></div>`;
+    return `<div class="obar" style="width:${Math.max(2,filled)}%; min-width:2px; margin-top:3px; height:10px;">${segs||''}</div>`;
   };
+  const emptyBar = `<div class="obar" style="margin-top:3px; height:10px;"></div>`;
+
+  const cellName = (id, taskOrDash, muted) => `<div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">`
+    + `<div style="font-weight:800; font-size:13px; text-transform:capitalize; line-height:1.15;${muted?' color:var(--muted);':''}">${esc(id)}</div>`
+    + `<div style="font-weight:600; font-size:11px; color:var(--muted); text-transform:capitalize; line-height:1.15; overflow:hidden; text-overflow:ellipsis;">${taskOrDash === BLANK ? BLANK : esc(taskOrDash)}</div></div>`;
   let html='';
-  for(let i=0;i<n;i++){
+  for(let i=0; i<n; i++){
     const r = list[i];
-    if(!r){ html += `<div class="card" style="padding:12px 14px;"></div>`; continue; }
-    let bars=''; if(!durOnly()) bars+=bar(r,true); if(metric.dur) bars+=bar(r,false);
-    html += `<div class="card" style="padding:12px 14px;">
-      <div style="font-weight:700; font-size:15px; text-transform:capitalize;">${esc(r.name)}</div>
-      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:4px; font-size:17px;">
-        <span style="font-weight:600;"><span style="color:${C.success};">${r.success||0}</span><span class="muted"> / ${r.total}</span></span>
-        <span style="font-weight:600;"><span style="color:${C.success};">${fmtDur((r.dur||{}).success||0)}</span><span class="muted"> / ${fmtDur(r.duration||0)}</span></span>
-      </div>${bars}</div>`;
+
+    if(!r){
+      html += `<div class="card" style="padding:8px 10px; min-width:0;">
+        ${cellName(ORDER[i], BLANK, true)}
+        <div title="success / total (count)" style="margin-top:6px; font-size:11.5px; color:var(--muted);">0<span class="muted">/0</span></div>
+        ${emptyBar}
+        <div title="success / total (time)" style="margin-top:5px; font-size:11.5px; color:var(--muted);">0s<span class="muted">/0s</span></div>
+        ${emptyBar}
+      </div>`;
+      continue;
+    }
+    const toks = (r.name||'').split('_'), cellId = toks[0] || '', task = toks[1] || BLANK;
+    const sDur = (r.dur||{}).success||0;
+    html += `<div class="card" style="padding:8px 10px; min-width:0;" title="${esc(r.name)}">
+      ${cellName(cellId, task, false)}
+      <div title="success / total (count)" style="margin-top:6px; font-size:11.5px; font-weight:700; white-space:nowrap;"><span style="color:${C.success};">${r.success||0}</span><span class="muted">/${r.total||0}</span></div>
+      ${bar(r,true)}
+      <div title="success / total (time)" style="margin-top:5px; font-size:11.5px; font-weight:700; white-space:nowrap;"><span style="color:${C.success};">${fmtDurShort(sDur)}</span><span class="muted">/${fmtDurShort(r.duration||0)}</span></div>
+      ${bar(r,false)}
+    </div>`;
   }
-  return {html, n};
+  return { html, n };
 }
 
 function renderBadges(d){
   const out = [];
-  const ago = min => min < 60 ? `${min}분 전`
-                   : min < 1440 ? `${Math.floor(min/60)}시간 전`
-                   : `${Math.floor(min/1440)}일 전`;
+  const ago = min => min < 60 ? `${min} min ago`
+                   : min < 1440 ? `${Math.floor(min/60)} hr ago`
+                   : `${Math.floor(min/1440)} days ago`;
 
   const gen  = meta?.generated_at || facts?.generated_at;
   const chk  = meta?.checked_at;
   const stale = chk ? (Date.now() - new Date(chk).getTime())/60000 > CFG.staleMinutes : false;
   if (gen){
     const genMin = Math.round((Date.now() - new Date(gen).getTime())/60000);
-    const tail = chk ? ` · ${ago(Math.round((Date.now() - new Date(chk).getTime())/60000))} 확인`
+    const tail = chk ? ` · checked ${ago(Math.round((Date.now() - new Date(chk).getTime())/60000))}`
                      : ` · ${ago(genMin)}`;
     out.push(`<span class="badge ${stale?'warn':'ok'}">${stale?'▲':'●'} `+
-             `${esc(gen.replace('T',' ').slice(0,16))} 데이터${esc(tail)}`+
-             `${stale?' — 갱신 멈춤':''}</span>`);
+             `Data as of ${esc(gen.replace('T',' ').slice(0,16))} KST${esc(tail)}`+
+             `${stale?' — updates stopped':''}</span>`);
   }
   const mounted = d.mounted_roots, roots = d.storage_roots;
   if (mounted != null && roots != null && mounted < roots)
-    out.push(`<span class="badge bad">▲ 스토리지 ${mounted}/${roots} 마운트 — 용량 수치 불완전</span>`);
+    out.push(`<span class="badge bad">▲ Storage ${mounted}/${roots} mounted — size figures incomplete</span>`);
 
   const st = meta?.replica_status, lag = meta?.replica_lag_s;
   if (st && st !== 'streaming')
-    out.push(`<span class="badge bad">▲ DB 복제 중단 (${esc(st)}) — 데이터가 뒤처질 수 있음</span>`);
+    out.push(`<span class="badge bad">▲ DB replication stopped (${esc(st)}) — data may be behind</span>`);
   else if (lag != null && lag > 600)
-    out.push(`<span class="badge warn">▲ DB 복제 지연 ${Math.round(lag/60)}분</span>`);
+    out.push(`<span class="badge warn">▲ DB replication lag ${Math.round(lag/60)} min</span>`);
   document.getElementById('badges').innerHTML = out.join('');
 }
 
@@ -519,10 +553,10 @@ function hideLock(){
 
 function cryptoBlocker(){
   if (!globalThis.crypto || !crypto.subtle)
-    return 'HTTPS 로 열어야 복호화할 수 있습니다(브라우저 보안 정책). ' + envInfo();
+    return 'This page must be served over HTTPS to decrypt. ' + envInfo();
   if (typeof DecompressionStream === 'undefined')
-    return '이 브라우저는 gzip 해제(DecompressionStream)를 지원하지 않습니다. '
-         + '최신 브라우저로 열어 주세요. ' + envInfo();
+    return 'This browser does not support gzip decompression (DecompressionStream). '
+         + 'Please use a newer browser. ' + envInfo();
   return null;
 }
 
@@ -558,7 +592,7 @@ async function loadFacts(){
       facts = await decryptFacts(buf, pass);
     } catch(e){
       store.del('pass');
-      showLock('저장된 암호로 열리지 않습니다. 다시 입력해 주세요.');
+      showLock('The saved passphrase no longer works. Please enter it again.');
       return false;
     }
   } else {
@@ -573,7 +607,7 @@ async function loadFacts(){
 async function refresh(){
   try { if (await loadFacts()) render(); }
   catch(e){ document.getElementById('badges').innerHTML =
-    `<span class="badge bad">▲ 데이터를 불러오지 못했습니다 — ${esc(e.message)}</span>`;
+    `<span class="badge bad">▲ Could not load data — ${esc(e.message)}</span>`;
     document.getElementById('app').hidden = false; }
 }
 
@@ -592,7 +626,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const err = document.getElementById('lockerr');
     const blocked = cryptoBlocker();
     if (blocked){ err.textContent = blocked; return; }
-    err.textContent = '여는 중…';
+    err.textContent = 'Opening…';
     try {
 
       const buf = (await fetchEnc(true)) || globalThis.__enc;
@@ -603,8 +637,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
       hideLock(); render();
     } catch(e){
       err.innerHTML = (e.code === 'BAD_PASS')
-        ? '암호가 올바르지 않습니다.'
-        : `복호화 단계 오류 [${esc(e.code || '?')}] ${esc(e.message || '')}<br>`
+        ? 'Incorrect passphrase.'
+        : `Decryption failed at [${esc(e.code || '?')}] ${esc(e.message || '')}<br>`
           + `<span style="opacity:.7">${esc(envInfo())}</span>`;
     }
   });
